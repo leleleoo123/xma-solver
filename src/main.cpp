@@ -16,11 +16,13 @@ int main(int argc, const char * argv[]) {
     
     string dir = "/Users/tanzhidan/Documents/aaaxacompetition/data_20170814";
     
+    
     Problem prob(dir);
     
     prob.Solve();
     
-    prob.SaveResults("/Users/tanzhidan/Documents/aaaxacompetition/results/leleleoo123_658150.00_1.csv");
+  //  prob.SaveResults("/Users/tanzhidan/Documents/java-xma/results/leleleoo123_680000.00_1.csv");
+    
     
     std::cout << "Hello, World!\n";
     return 0;

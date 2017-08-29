@@ -34,7 +34,6 @@ void Typhoon::ExtractInfo(const Scene &scene)
         mtNoStop = scene.mtStartDateTime;
         mtEnd = scene.mtEndDateTime;
         mnMaxStopPlanes = scene.mnMaxStopPlanes;
-        mnRestStops = mnMaxStopPlanes;
     }
 }
 

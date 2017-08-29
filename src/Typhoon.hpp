@@ -37,6 +37,8 @@ public:
     void ResetSliceMap();
     void AddSliceCount(const time_t& t);
     
+    
+    
 public:
     
     // 机场ID
@@ -66,11 +68,12 @@ public:
     
     
     // -------- for solver -------
-    // 剩余停机位
-    int mnRestStops;
+    // 台风期间在该机场停机的飞机
+    std::vector<int> mvStopAirplanes;
     
     // 台风前一小时/台风后两小时, 每5分钟内起飞或者降落的航班数
     std::map<int, int> mSliceMap;
+    
     
 };
 

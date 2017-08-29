@@ -31,6 +31,10 @@ public:
     
     double AdjustSingleAirline(int airplaneId);
     
+    
+    double AdjustPairedAirlines(int airplaneIdA, int airplaneIdB, bool saveResult);
+    
+    
     void SaveResults(const std::string &filename);
     
 private:
