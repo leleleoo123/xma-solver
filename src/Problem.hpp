@@ -34,10 +34,15 @@ public:
     
     double AdjustPairedAirlines(int airplaneIdA, int airplaneIdB, bool saveResult);
     
+   
+    double AdjustGroupedAirlines(const std::vector<int> &vAirplaneIds, bool saveResult);
     
     void SaveResults(const std::string &filename);
     
 private:
+    
+    // 找到一个可行解
+    void FindAFeasibleSolution();
     
     // 把起飞时间在调整窗口之前的航班分到一边去
     void SeparatePreAdjFlights();
@@ -52,7 +57,7 @@ private:
     bool TryConnectFlights(const Flight& flightA, const Flight& flightB);
     
     // 统计在单位时间容量限制时间段内起降的航班
-    void UpdateSliceMaps(const ResultFlight& rf);
+    void UpdateSliceMaps(const ResultFlight& rf, bool AddOrReduce);
     
     //
     void CutOccupiedSlices(std::vector<Flight>& vFlights);
@@ -103,6 +108,7 @@ private:
     // ------------- 调整后的数据 ------------------------
     std::map<int, ResultFlight> mResultFlightMap;
     
+    std::map<int, std::vector<ResultFlight> > mResultAdjAirlineMap;
     
 };
 

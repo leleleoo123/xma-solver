@@ -36,6 +36,7 @@ public:
     void CreateSliceMap();
     void ResetSliceMap();
     void AddSliceCount(const time_t& t);
+    void ReduceSliceCount(const time_t& t);
     
     
     

@@ -7,6 +7,7 @@
 //
 
 #include "Typhoon.hpp"
+#include <iostream>
 
 Typhoon::Typhoon() {}
 
@@ -109,3 +110,25 @@ void Typhoon::AddSliceCount(const time_t &t)
     }
     
 }
+
+
+void Typhoon::ReduceSliceCount(const time_t &t)
+{
+    if (mbStopLimitedOnly)
+        return;
+    
+    if ((t>=mtOneHourBeforeNoTakeoff && t<=mtNoTakeOff) || (t>=mtEnd && t<=mtTwoHourAfterEnd)) {
+        int loc = (int)((t-mtOneHourBeforeNoTakeoff) / 300);
+        if (mSliceMap[loc] < 1) {
+            std::cout << "Error when reducing slice count" << std::endl;
+            abort();
+        }
+        mSliceMap[loc]--;
+    }
+    
+}
+
+
+
+
+
