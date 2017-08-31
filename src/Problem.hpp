@@ -28,14 +28,8 @@ public:
     Problem(const std::string &dir);
     
     void Solve();
-    
-    double AdjustSingleAirline(int airplaneId);
-    
-    
-    double AdjustPairedAirlines(int airplaneIdA, int airplaneIdB, bool saveResult);
-    
    
-    double AdjustGroupedAirlines(const std::vector<int> &vAirplaneIds, bool saveResult);
+    double AdjustGroupedAirlines(const std::vector<int> &vAirplaneIds, bool cutWhole, bool showInfo, bool saveResult);
     
     void SaveResults(const std::string &filename);
     
@@ -60,7 +54,7 @@ private:
     void UpdateSliceMaps(const ResultFlight& rf, bool AddOrReduce);
     
     //
-    void CutOccupiedSlices(std::vector<Flight>& vFlights);
+    void CutOccupiedSlices(std::vector<Flight>& vFlights, bool cutWhole);
     
 private:
     
