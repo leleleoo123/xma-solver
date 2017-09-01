@@ -288,7 +288,7 @@ Problem::Problem(const string& dir)
 
 void Problem::Solve()
 {
-    /* 先不引入调机空飞的操作: 对于竞赛中描述的场景, 调机空飞的架次应该非常非常少才对, 先不予考虑, 可以大大简化问题。
+    /** 先不引入调机空飞的操作: 对于竞赛中描述的场景, 调机空飞的架次应该非常非常少才对, 先不予考虑, 可以大大简化问题。
      * 留到最后再仔细分析下。
      * 嗯，很有道理哟!!! 哈哈哈!!! 哈哈哈!!! 哈哈哈!!!
      */
@@ -300,7 +300,29 @@ void Problem::Solve()
     SeparatePreAdjFlights();
     
     // ---- 找到一个相对不错的可行解 -----------
-    FindAFeasibleSolution();
+    //FindAFeasibleSolution();
+    
+    
+    string soluFile = "/Users/tanzhidan/Documents/aaaxacompetition/data/feasible_solution.txt";
+    vector<vector<int> > planeGroups;
+    vector<double> costs;
+    LoadASolution(soluFile, planeGroups, costs);
+    
+    double totalGroupCost = 0;
+    for (size_t i=0; i<planeGroups.size(); i++)
+    {
+        const vector<int> &vids = planeGroups[i];
+        double cost = AdjustGroupedAirlines(vids, true, 0, 1);
+        totalGroupCost += cost;
+        
+        for (size_t j=0; j<vids.size(); j++) {
+            cout << vids[j] << ", ";
+        }
+        cout << "cost: " << cost << endl;
+    }
+    cout << "二三四机联调: " << totalGroupCost << endl;
+    
+    
     
 }
 
@@ -386,6 +408,7 @@ void Problem::FindAFeasibleSolution()
         const vector<int> &vids = planeGroups[i];
         double cost = AdjustGroupedAirlines(planeGroups[i], true, 0, 0);
         totalPairCost += cost;
+        groupCosts.push_back(cost);
         for (size_t j=0; j<vids.size(); j++) {
             cout << vids[j] << ", ";
         }
@@ -394,12 +417,73 @@ void Problem::FindAFeasibleSolution()
     cout << "双机联调: " << totalPairCost << endl;
     
     
-    // --- 三机或四机联调 -------------------------------------------------
-    vector<vector<int> > oldPlaneGroups = planeGroups;
-    planeGroups.clear();
+    // --- 双机,三机或四机联调 -------------------------------------------------
+    vector<vector<int> > newPlaneGroups;
     
     vSortedIdxs = sort_indices(groupCosts);
     
+    while (vSortedIdxs.size() > 1)
+    {
+        size_t queryIdx = vSortedIdxs[0];
+        size_t bestj = 0;
+        double mostReducedCost = -1000;
+        const vector<int>& vids_query = planeGroups[queryIdx];
+        vector<int> vids;
+        
+        for (size_t j=1; j<vSortedIdxs.size(); j++)
+        {
+            size_t trialIdx = vSortedIdxs[j];
+            const vector<int>& vids_trial = planeGroups[trialIdx];
+            vids = vids_query;
+            vids.insert(vids.end(), vids_trial.begin(), vids_trial.end());
+            
+            double pairCost = AdjustGroupedAirlines(vids, true, 1, 0);
+            double reducedCost = groupCosts[queryIdx] + groupCosts[trialIdx] - pairCost;
+            if (reducedCost > mostReducedCost) {
+                bestj = j;
+                mostReducedCost = reducedCost;
+            }
+        }
+        if (bestj == 0) {
+            cout << "三机或四机联调时出错!!!" << endl;
+            waitKey();
+        }
+        
+        size_t trainIdx = vSortedIdxs[bestj];
+        if (mostReducedCost > 100) {
+            const vector<int>& vids_train = planeGroups[trainIdx];
+            vids = vids_query;
+            vids.insert(vids.end(), vids_train.begin(), vids_train.end());
+            
+            newPlaneGroups.push_back(vids);
+            vSortedIdxs.erase(vSortedIdxs.begin()+bestj);
+            vSortedIdxs.erase(vSortedIdxs.begin());
+        } else {
+            newPlaneGroups.push_back(vids_query);
+            vSortedIdxs.erase(vSortedIdxs.begin());
+        }
+        
+        cout << "Group " << queryIdx << "+" << trainIdx << " : " << mostReducedCost << endl;
+    }
+    if (!vSortedIdxs.empty()) {
+        newPlaneGroups.push_back(planeGroups[vSortedIdxs[0]]);
+    }
+    
+    
+    // 整理双机/三机/四机联调的结果
+    double totalGroupCost = 0;
+    for (size_t i=0; i<newPlaneGroups.size(); i++)
+    {
+        const vector<int> &vids = newPlaneGroups[i];
+        double cost = AdjustGroupedAirlines(vids, true, 1, 1);
+        totalGroupCost += cost;
+        
+        for (size_t j=0; j<vids.size(); j++) {
+            cout << vids[j] << ", ";
+        }
+        cout << "cost: " << cost << endl;
+    }
+    cout << "二三四机联调: " << totalGroupCost << endl;
     
     
     
@@ -1176,6 +1260,33 @@ void Problem::CutOccupiedSlices(std::vector<Flight> &vFlights, bool cutWhole)
             }
         }
     }
+}
+
+
+
+void Problem::LoadASolution(const std::string &filename, vector<vector<int> > &planeGroups, vector<double>& costs)
+{
+    ifstream ifs(filename);
+    
+    string aline, s;
+    vector<double> data;
+    
+    while (!ifs.eof()) {
+        getline(ifs, aline);
+        stringstream stream(aline);
+        data.clear();
+        while (getline(stream, s, ','))
+        {
+            data.push_back(stod(s));
+        }
+        vector<int> ids(data.size()-1, 0);
+        for (size_t i=0; i<data.size()-1; i++) {
+            ids[i] = (int)data[i];
+        }
+        planeGroups.push_back(ids);
+        costs.push_back(data.back());
+    }
+    
 }
 
 

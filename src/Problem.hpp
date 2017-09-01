@@ -56,6 +56,9 @@ private:
     //
     void CutOccupiedSlices(std::vector<Flight>& vFlights, bool cutWhole);
     
+    //
+    void LoadASolution(const std::string& filename, std::vector<std::vector<int> > &planeGroups, std::vector<double>& costs);
+    
 private:
     
     // ------------- 原始数据 -----------------------------
