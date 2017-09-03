@@ -19,6 +19,8 @@ public:
     
     ResultFlight();
     
+    ResultFlight(const std::string &row);
+    
     ResultFlight(const Flight& flight);
     
     ResultFlight(const int flightId,

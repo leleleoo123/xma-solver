@@ -47,6 +47,9 @@ public:
     // 把格式如 "10/20/17 18:30" 的字符串转成 time_t
     static time_t StrToDateTime(std::string& str);
     
+    // 把格式如 "2017/05/05 12:20" 的字符串转成 time_t
+    static time_t ResStrToDateTime(std::string& str);
+    
     // 把格式如 "0:15" 或 "23:00" 的字符串转成 time_t
     static time_t StrToTime(std::string& str);
     

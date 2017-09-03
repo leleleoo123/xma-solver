@@ -39,6 +39,7 @@ void LoadSolution(const string& file, vector<vector<int> > &planeGroups, vector<
 
 int main(int argc, const char * argv[]) {
     
+    
     string dir = "/Users/tanzhidan/Documents/aaaxacompetition/data_20170814";
     
     
@@ -49,7 +50,7 @@ int main(int argc, const char * argv[]) {
     clock_t tend = clock();
     cout << "Time: " << (double)(tend-tbegin)/CLOCKS_PER_SEC << endl;
     
-    prob.SaveResults("/Users/tanzhidan/Documents/java-xma/results/leleleoo123_680000.00_1.csv");
+    prob.SaveResults("/Users/tanzhidan/Documents/java-xma/results/leleleoo123_420000.00_1.csv");
     
     
     std::cout << "Hello, World!\n";

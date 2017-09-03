@@ -31,12 +31,20 @@ public:
    
     double AdjustGroupedAirlines(const std::vector<int> &vAirplaneIds, bool cutWhole, bool showInfo, bool saveResult);
     
+    double AdjustLargeAirlineGroup(const std::vector<int> &vAriplaneIds,
+                                   std::map<int, ResultFlight>& resultFlightMap,
+                                   std::map<int, std::vector<ResultFlight> >& resultAirlineMap,
+                                   double maxOptTime);
+    
     void SaveResults(const std::string &filename);
     
 private:
     
     // 找到一个可行解
     void FindAFeasibleSolution();
+    
+    // 用Gurobi提升可行解
+    void ImproveSolutionGrb();
     
     // 把起飞时间在调整窗口之前的航班分到一边去
     void SeparatePreAdjFlights();
@@ -57,7 +65,11 @@ private:
     void CutOccupiedSlices(std::vector<Flight>& vFlights, bool cutWhole);
     
     //
-    void LoadASolution(const std::string& filename, std::vector<std::vector<int> > &planeGroups, std::vector<double>& costs);
+    void LoadASolution(const std::string& groupInfoFile,
+                       const std::string& resultFlightFile,
+                       std::vector<std::vector<int> > &planeGroups,
+                       std::vector<double>& costs,
+                       std::map<int, ResultFlight>& resultFlightMap);
     
 private:
     

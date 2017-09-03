@@ -41,6 +41,17 @@ time_t Helper::StrToDateTime(std::string &str)
 }
 
 
+time_t Helper::ResStrToDateTime(std::string &str)
+{
+    // 记得要初始化tm结构, 否则会出现bug
+    struct tm dateTime = {0};
+    strptime(str.c_str(), "%Y/%m/%d %H:%M", &dateTime);
+    
+    return mktime(&dateTime);
+}
+
+
+
 time_t Helper::StrToTime(std::string &str)
 {
     size_t idx = str.find(":");
