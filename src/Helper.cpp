@@ -11,7 +11,7 @@
 #include <sstream>
 #include <iomanip>
 
-const time_t T2000_01_01 = 946656000;
+const time_t T0504Clock0000 = 1493827200;
 
 time_t Helper::StrToDate(std::string &str)
 {
@@ -23,7 +23,7 @@ time_t Helper::StrToDate(std::string &str)
     struct tm date = {0};
     strptime(str.c_str(), "%m/%d/%Y", &date);
     
-    return mktime(&date);
+    return (mktime(&date)-T0504Clock0000);
 }
 
 
@@ -37,7 +37,7 @@ time_t Helper::StrToDateTime(std::string &str)
     struct tm dateTime = {0};
     strptime(str.c_str(), "%m/%d/%Y %H:%M", &dateTime);
     
-    return mktime(&dateTime);
+    return (mktime(&dateTime)-T0504Clock0000);
 }
 
 
@@ -47,7 +47,7 @@ time_t Helper::ResStrToDateTime(std::string &str)
     struct tm dateTime = {0};
     strptime(str.c_str(), "%Y/%m/%d %H:%M", &dateTime);
     
-    return mktime(&dateTime);
+    return (mktime(&dateTime)-T0504Clock0000);
 }
 
 
@@ -64,7 +64,8 @@ time_t Helper::StrToTime(std::string &str)
 
 std::string Helper::DateTimeToString(const time_t dateTime)
 {
-    std::tm *ltm = localtime(&dateTime);
+    time_t dateTimeee = dateTime + T0504Clock0000;
+    std::tm *ltm = localtime(&dateTimeee);
     std::stringstream stream;
     stream << std::put_time(ltm, "%m/%d_%H:%M");
     return stream.str();
@@ -73,19 +74,20 @@ std::string Helper::DateTimeToString(const time_t dateTime)
 
 std::string Helper::DateTimeToFullString(const time_t dateTime)
 {
-    std::tm *ltm = localtime(&dateTime);
+    time_t dateTimeee = dateTime + T0504Clock0000;
+    std::tm *ltm = localtime(&dateTimeee);
     std::stringstream stream;
     stream << std::put_time(ltm, "%Y/%m/%d %H:%M");
     return stream.str();
 }
 
 
-
+// Notice that this time has already subtract T0504Clock0000
 time_t Helper::KeepDateOnly(const time_t dateTime)
 {
-    time_t temp = dateTime - T2000_01_01;
+    time_t temp = dateTime;
     
-    return (T2000_01_01 +  (temp / 86400)*86400);
+    return ((temp / 86400)*86400);
 }
 
 

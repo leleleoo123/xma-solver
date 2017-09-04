@@ -53,6 +53,15 @@ int main(int argc, const char * argv[]) {
     prob.SaveResults("/Users/tanzhidan/Documents/java-xma/results/leleleoo123_420000.00_1.csv");
     
     
+    string str1 = "5/4/17 00:00";
+    time_t t1 = Helper::StrToDateTime(str1);
+    
+    string str2 = "5/6/17 16:00";
+    time_t t2 = Helper::StrToDateTime(str2);
+    
+    cout << "time1: " << t1 << endl;
+    cout << "time2: " << t2 << endl;
+    
     std::cout << "Hello, World!\n";
     return 0;
 }

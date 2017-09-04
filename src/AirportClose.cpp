@@ -31,6 +31,9 @@ AirportClose::AirportClose(const std::string &row)
     // 生效日期
     getline(stream, term, ',');
     mtBeginDate = Helper::StrToDate(term);
+    if (mtBeginDate < 0) {
+        mtBeginDate = 0;
+    }
     
     // 失效日期
     getline(stream, term, ',');
@@ -62,6 +65,7 @@ bool AirportClose::IsClosed(const time_t t)
 void AirportClose::AdjustTimeWindows(std::vector<std::pair<time_t, time_t> > &timeWindows,
                                      const time_t qqTime)
 {
+    
     if (timeWindows.empty()) {
         return;
     }

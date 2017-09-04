@@ -18,7 +18,7 @@ const int ConnectFlightStraightenParam = 750;
 const double DelayFlightParam = 100.0/3600.0;
 const double AheadFlightParam = 150.0/3600.0;
 
-const time_t Date0506Clock16 = 1494057600;
+const time_t Date0506Clock16 = 230400; //1494057600;
 const int PlaneChangeParamBefore = 15;
 const int PlaneChangeParamAfter = 5;
 const int FlightTypeChangeParams[4][4] = {{0,0,1000,2000},{250,0,1000,2000}, {750,750,0,1000}, {750,750,1000,0}};

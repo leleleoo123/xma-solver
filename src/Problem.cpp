@@ -304,7 +304,9 @@ void Problem::Solve()
     *FindAFeasibleSolution();
     */
     
-    ImproveSolutionGrb();
+    BruteImprove();
+    
+    //ImproveSolution();
     
     
 }
@@ -327,7 +329,7 @@ void Problem::FindAFeasibleSolution()
     {
         const int airplaneId = mit.first;
         vector<int> vids(1,airplaneId);
-        double cost = AdjustGroupedAirlines(vids, true, 0, 0);
+        double cost = AdjustGroupedAirlines(vids, true, 0, 0, 1000000);
         cout << airplaneId << ": " << cost << endl;
         vSAscores[airplaneId] = cost;
     }
@@ -350,7 +352,7 @@ void Problem::FindAFeasibleSolution()
         {
             int trialPlaneId = (int)vSortedIdxs[j];
             vids[1] = trialPlaneId;
-            double pairCost = AdjustGroupedAirlines(vids, true, 0, 0);
+            double pairCost = AdjustGroupedAirlines(vids, true, 0, 0, 1000000);
             double reducedCost = vSAscores[queryPlaneId] + vSAscores[trialPlaneId] - pairCost;
             if (reducedCost > mostReducedCost)
             {
@@ -384,7 +386,7 @@ void Problem::FindAFeasibleSolution()
     vector<double> groupCosts;
     for (size_t i=0; i<planeGroups.size(); i++) {
         const vector<int> &vids = planeGroups[i];
-        double cost = AdjustGroupedAirlines(planeGroups[i], true, 0, 0);
+        double cost = AdjustGroupedAirlines(planeGroups[i], true, 0, 0, 1000000);
         totalPairCost += cost;
         groupCosts.push_back(cost);
         for (size_t j=0; j<vids.size(); j++) {
@@ -415,7 +417,7 @@ void Problem::FindAFeasibleSolution()
             vids = vids_query;
             vids.insert(vids.end(), vids_trial.begin(), vids_trial.end());
             
-            double pairCost = AdjustGroupedAirlines(vids, true, 0, 0);
+            double pairCost = AdjustGroupedAirlines(vids, true, 0, 0, 1000000);
             double reducedCost = groupCosts[queryIdx] + groupCosts[trialIdx] - pairCost;
             if (reducedCost > mostReducedCost) {
                 bestj = j;
@@ -450,7 +452,7 @@ void Problem::FindAFeasibleSolution()
     for (size_t i=0; i<newPlaneGroups.size(); i++)
     {
         const vector<int> &vids = newPlaneGroups[i];
-        double cost = AdjustGroupedAirlines(vids, true, 0, 0);
+        double cost = AdjustGroupedAirlines(vids, true, 0, 0, 1000000);
         totalGroupCost += cost;
         groupCosts.push_back(cost);
         
@@ -483,7 +485,7 @@ void Problem::FindAFeasibleSolution()
             vids = vids_query;
             vids.insert(vids.end(), vids_trial.begin(), vids_trial.end());
             
-            double pairCost = AdjustGroupedAirlines(vids, true, 1, 0);
+            double pairCost = AdjustGroupedAirlines(vids, true, 1, 0, 1000000);
             double reducedCost = groupCosts[queryIdx] + groupCosts[trialIdx] - pairCost;
             if (reducedCost > mostReducedCost) {
                 bestj = j;
@@ -518,7 +520,7 @@ void Problem::FindAFeasibleSolution()
     for (size_t i=0; i<newPlaneGroups.size(); i++)
     {
         const vector<int> &vids = newPlaneGroups[i];
-        double cost = AdjustGroupedAirlines(vids, true, 0, 1);
+        double cost = AdjustGroupedAirlines(vids, true, 0, 1, 1000000);
         totalGroupCost += cost;
         groupCosts.push_back(cost);
         
@@ -543,8 +545,9 @@ void Problem::FindAFeasibleSolution()
 
 
 
-void Problem::ImproveSolutionGrb()
+void Problem::BruteImprove()
 {
+    // --- Load results ---------------------------
     string groupInfoFile = "/Users/tanzhidan/Documents/aaaxacompetition/data/eight_adjust_solution.txt";
     string resultFlightFile = "/Users/tanzhidan/Documents/aaaxacompetition/nice_results/leleleoo123_817343.00_420.csv";
     vector<vector<int> > planeGroups;
@@ -552,22 +555,21 @@ void Problem::ImproveSolutionGrb()
     map<int, ResultFlight> resultFlightMap;
     LoadASolution(groupInfoFile, resultFlightFile, planeGroups, groupCosts, resultFlightMap);
     
-    // ------- DEBUG PRINT -------------------------------
-//    for (size_t i=0; i<planeGroups.size(); i++) {
-//        const vector<int>& vids = planeGroups[i];
-//        for (size_t j=0; j<vids.size(); j++) {
-//            cout << vids[j] << ", ";
-//        }
-//        cout << groupCosts[i] << endl;
-//    }
-    
-    // Create result airline map
+    // Result airline map
     map<int, vector<ResultFlight> > resultAirlineMap;
-    for (auto& mit : resultFlightMap) {
+    
+    for (auto& mit : resultFlightMap)
+    {
         ResultFlight rf = mit.second;
-        if (rf.mbIsCancel || rf.mtStartDateTime < mtRecoveryStart) {
+        
+        if (rf.mbIsCancel) {
             continue;
         }
+        
+        if (rf.mtStartDateTime < mtRecoveryStart) {
+            continue;
+        }
+        
         int planeId = rf.mnAirplaneId;
         if (resultAirlineMap.count(planeId)) {
             resultAirlineMap[planeId].push_back(rf);
@@ -584,75 +586,759 @@ void Problem::ImproveSolutionGrb()
         sort(vrfs.begin(), vrfs.end());
     }
     
-    // --- New plane group ------------------------
-    vector<vector<int> > newPlaneGroups;
-    newPlaneGroups.push_back(planeGroups[0]);
     
-    vector<int> newGroup;
-    
-    newGroup.clear();
-    for (int i=1; i<4; i++)
-    {
-        newGroup.insert(newGroup.end(), planeGroups[i].begin(), planeGroups[i].end());
+    // --- Compute costs we already have -----------------------------
+    // Gurobi costs for each airline
+    map<int, double> alreadyAirlineCosts;
+    for (auto& mit : resultAirlineMap) {
+        const int planeId = mit.first;
+        const vector<ResultFlight>& resultAirline = mit.second;
+        double airlineCost = CalcResultAirlineCost(resultAirline);
+        alreadyAirlineCosts[planeId] = airlineCost;
+        cout << "%%%%%%%%%%%%%%%%%%%%% " << endl;
+        cout << planeId << ": calc cost " << airlineCost << endl;
     }
-    newPlaneGroups.push_back(newGroup);
+
     
-    newGroup.clear();
-    for (int i=4; i<7; i++)
-    {
-        newGroup.insert(newGroup.end(), planeGroups[i].begin(), planeGroups[i].end());
-    }
-    newPlaneGroups.push_back(newGroup);
-    
-    newGroup.clear();
-    for (int i=7; i<10; i++) {
-        newGroup.insert(newGroup.end(), planeGroups[i].begin(), planeGroups[i].end());
-    }
-    newPlaneGroups.push_back(newGroup);
-    
-    newGroup.clear();
-    for (int i=10; i<13; i++) {
-        newGroup.insert(newGroup.end(), planeGroups[i].begin(), planeGroups[i].end());
-    }
-    newPlaneGroups.push_back(newGroup);
-    
-    newGroup.clear();
-    for (int i=13; i<16; i++) {
-        newGroup.insert(newGroup.end(), planeGroups[i].begin(), planeGroups[i].end());
-    }
-    newPlaneGroups.push_back(newGroup);
-    
-    newGroup.clear();
-    for (int i=16; i<(int)planeGroups.size(); i++) {
-        newGroup.insert(newGroup.end(), planeGroups[i].begin(), planeGroups[i].end());
-    }
-    newPlaneGroups.push_back(newGroup);
-    
-    planeGroups = newPlaneGroups;
-    
-    
-    // ------- Improve -----------------------------
-    double totalCost = 0;
-    
-    for (int i=0; i<(int)planeGroups.size(); i++)
-    {
+    /*
+    // --- Combine groups --------------------------------
+    for (size_t i=0; i<planeGroups.size(); i++) {
         vector<int> vids = planeGroups[i];
-        double cost = AdjustLargeAirlineGroup(vids, resultFlightMap, resultAirlineMap, 100);
-        totalCost += cost;
-        for (size_t k=0; k<vids.size(); k++)
-        {
-            cout << vids[k] << ", ";
+        double alreadyCost = 0;
+        for (size_t j=0; j<vids.size(); j++) {
+            alreadyCost += alreadyAirlineCosts[vids[j]];
         }
-        cout << cost << endl << endl << endl << endl << endl;
+        double score = AdjustGroupedAirlines(vids, true, true, true, alreadyCost);
     }
     
-    cout << "Total cost: " << totalCost << endl;
     
+    //
+    vector<vector<int> > newPlaneGroups;
+    newPlaneGroups.clear();
+    
+    vector<size_t> vSortedIdxs = sort_indices(groupCosts);
+    
+    while (vSortedIdxs.size() > 1)
+    {
+        size_t queryIdx = vSortedIdxs[0];
+        size_t bestj = 0;
+        double mostReducedCost = -1000;
+        const vector<int>& vids_query = planeGroups[queryIdx];
+        vector<int> vids;
+        
+        for (size_t j=1; j<vSortedIdxs.size(); j++)
+        {
+            size_t trialIdx = vSortedIdxs[j];
+            const vector<int>& vids_trial = planeGroups[trialIdx];
+            vids = vids_query;
+            vids.insert(vids.end(), vids_trial.begin(), vids_trial.end());
+            
+            // Compute upper bound
+            double costUb = 0;
+            for (size_t l=0; l<vids.size(); l++) {
+                costUb += alreadyAirlineCosts[vids[l]];
+            }
+            
+            double pairCost = AdjustGroupedAirlines(vids, true, 1, 0, costUb);
+            double reducedCost = groupCosts[queryIdx] + groupCosts[trialIdx] - pairCost;
+            if (reducedCost > mostReducedCost) {
+                bestj = j;
+                mostReducedCost = reducedCost;
+            }
+        }
+        if (bestj == 0) {
+            cout << "暴力联调时出错!!!" << endl;
+            waitKey();
+        }
+        
+        size_t trainIdx = vSortedIdxs[bestj];
+        const vector<int>& vids_train = planeGroups[trainIdx];
+        vids = vids_query;
+        vids.insert(vids.end(), vids_train.begin(), vids_train.end());
+        
+        newPlaneGroups.push_back(vids);
+        vSortedIdxs.erase(vSortedIdxs.begin()+bestj);
+        vSortedIdxs.erase(vSortedIdxs.begin());
+        
+        cout << "Group " << queryIdx << "+" << trainIdx << " : " << mostReducedCost << endl;
+    }
+    if (!vSortedIdxs.empty()) {
+        newPlaneGroups.push_back(planeGroups[vSortedIdxs[0]]);
+    }
+    
+    
+    // 整理暴力联调的结果
+    planeGroups = newPlaneGroups;
+    groupCosts.clear();
+    double totalGroupCost = 0;
+    for (size_t i=0; i<newPlaneGroups.size(); i++)
+    {
+        const vector<int> &vids = newPlaneGroups[i];
+        
+        double costUb = 0;
+        for (size_t l=0; l<vids.size(); l++) {
+            costUb += alreadyAirlineCosts[vids[l]];
+        }
+        
+        double cost = AdjustGroupedAirlines(vids, true, true, 1, costUb);
+        totalGroupCost += cost;
+        groupCosts.push_back(cost);
+        
+        for (size_t j=0; j<vids.size(); j++) {
+            cout << vids[j] << ", ";
+        }
+        cout << "cost: " << cost << endl;
+    }
+    cout << "暴力联调: " << totalGroupCost << endl;
+    */
 }
 
 
 
-double Problem::AdjustGroupedAirlines(const std::vector<int> &airplaneIds, bool cutWhole, bool showInfo, bool saveResult)
+void Problem::ImproveSolution()
+{
+    // --- Load results ---------------------------
+    string groupInfoFile = "/Users/tanzhidan/Documents/aaaxacompetition/data/eight_adjust_solution.txt";
+    string resultFlightFile = "/Users/tanzhidan/Documents/aaaxacompetition/nice_results/leleleoo123_756902.667_422.csv";
+    vector<vector<int> > planeGroups;
+    vector<double> groupCosts;
+    map<int, ResultFlight> resultFlightMap;
+    LoadASolution(groupInfoFile, resultFlightFile, planeGroups, groupCosts, resultFlightMap);
+    
+    int numTotalPlanes = (int)mAllAirlineMap.size();
+    
+    // --- Create result airline map --------------------------------
+    set<int> cancelSet;
+    map<int, vector<ResultFlight> > resultAirlineMap;   // with canceld flights removed
+    
+    for (int iter=0; iter<1; iter++)
+    {
+        cout << "ITER%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%-------" << iter << endl;
+        
+        // Get result airlines
+        cancelSet.clear();
+        resultAirlineMap.clear();   // with canceld flights removed
+        
+        for (auto& mit : resultFlightMap)
+        {
+            ResultFlight rf = mit.second;
+            
+            if (rf.mbIsCancel) {
+                cancelSet.insert(rf.mnFlightId);
+                continue;
+            }
+            
+            if (rf.mtStartDateTime < mtRecoveryStart) {
+                continue;
+            }
+            int planeId = rf.mnAirplaneId;
+            if (resultAirlineMap.count(planeId)) {
+                resultAirlineMap[planeId].push_back(rf);
+            }
+            else {
+                vector<ResultFlight> rfVector;
+                rfVector.push_back(rf);
+                resultAirlineMap[planeId] = rfVector;
+            }
+        }
+        
+        for (auto& mit : resultAirlineMap) {
+            vector<ResultFlight>& vrfs = mit.second;
+            sort(vrfs.begin(), vrfs.end());
+        }
+        
+        // 把一些取消了的航班抢救回来, 同时慢慢放开停机和单位时间容量限制约束
+        
+        double reducedCost = 0;
+        for (int iplane=1; iplane<=numTotalPlanes; iplane++)
+        {
+            double acost = LetTspWork(iplane, resultFlightMap, cancelSet, true);
+            if (acost < -100) {
+                acost = LetTspWork(iplane, resultFlightMap, cancelSet, false);
+            }
+            reducedCost += acost;
+        }
+        cout << "------------------------------------------------------------REDUCE COST: " << reducedCost << endl << endl << endl;
+        
+    }
+    // Iteration finished!!!!!!!!!!
+    
+    for (auto& sit : cancelSet)
+    {
+        ResultFlight rf = resultFlightMap[sit];
+        mResultFlightMap[rf.mnFlightId] = rf;
+    }
+
+    
+    
+    /*
+    
+     // Gurobi costs for each airline
+     map<int, double> alreadyAirlineCosts;
+     for (auto& mit : resultAirlineMap) {
+     const int planeId = mit.first;
+     const vector<ResultFlight>& resultAirline = mit.second;
+     double airlineCost = CalcResultAirlineCost(resultAirline);
+     alreadyAirlineCosts[planeId] = airlineCost;
+     cout << "%%%%%%%%%%%%%%%%%%%%% " << endl;
+     cout << planeId << ": calc cost " << airlineCost << endl;
+     }
+
+     
+     
+    // 暴力提高
+    vector<vector<int> > newPlaneGroups;
+    vector<size_t> vSortedIdxs;
+    vSortedIdxs = sort_indices(groupCosts);
+    
+    while (vSortedIdxs.size() > 1)
+    {
+        size_t queryIdx = vSortedIdxs[0];
+        size_t bestj = 0;
+        double mostReducedCost = -1000;
+        const vector<int>& vids_query = planeGroups[queryIdx];
+        vector<int> vids;
+        
+        for (size_t j=1; j<vSortedIdxs.size(); j++)
+        {
+            size_t trialIdx = vSortedIdxs[j];
+            const vector<int>& vids_trial = planeGroups[trialIdx];
+            vids = vids_query;
+            vids.insert(vids.end(), vids_trial.begin(), vids_trial.end());
+            
+            double alreadyCost = 0;
+            for (int k=0; k<(int)vids.size(); k++) {
+                alreadyCost += alreadyAirlineCosts[k];
+            }
+            cout << "Group already cost: " << alreadyCost << endl;
+            double pairCost = AdjustGroupedAirlines(vids, true, 1, 0, alreadyCost);
+            double reducedCost = groupCosts[queryIdx] + groupCosts[trialIdx] - pairCost;
+            if (reducedCost > mostReducedCost) {
+                bestj = j;
+                mostReducedCost = reducedCost;
+            }
+        }
+        if (bestj == 0) {
+            cout << "四机联调时出错!!!" << endl;
+            waitKey();
+        }
+        
+        size_t trainIdx = vSortedIdxs[bestj];
+        const vector<int>& vids_train = planeGroups[trainIdx];
+        vids = vids_query;
+        vids.insert(vids.end(), vids_train.begin(), vids_train.end());
+        
+        newPlaneGroups.push_back(vids);
+        vSortedIdxs.erase(vSortedIdxs.begin()+bestj);
+        vSortedIdxs.erase(vSortedIdxs.begin());
+        
+        cout << "Group " << queryIdx << "+" << trainIdx << " : " << mostReducedCost << endl;
+    }
+    if (!vSortedIdxs.empty()) {
+        newPlaneGroups.push_back(planeGroups[vSortedIdxs[0]]);
+    }
+    */
+    
+}
+
+
+// Notice that resultFlightMap & cancelSet will be updated here
+double Problem::LetTspWork(const int airplaneId,
+                           std::map<int, ResultFlight> &resultFlightMap,
+                           std::set<int> &cancelSet,
+                           bool useCancelSet
+                           )
+{
+    double reduceCost = 1e8;
+    
+    vector<ResultFlight> resultAirline;
+    for (auto& mit : resultFlightMap) {
+        ResultFlight rf = mit.second;
+        if (!rf.mbIsCancel && rf.mnAirplaneId==airplaneId && rf.mtStartDateTime >= mtRecoveryStart) {
+            resultAirline.push_back(rf);
+        }
+    }
+    sort(resultAirline.begin(), resultAirline.end());
+    
+    
+    const int thisPlaneType = mAdjAirlineMap[airplaneId][0].mnAirplaneType;
+    const int Nres = (int)resultAirline.size();
+    
+    // Cost of this result airline
+    double alreadyCost = 0;
+    for (size_t i=0; i<resultAirline.size(); i++)
+    {
+        double icost = -CancelFlightParam;
+        const ResultFlight& resultFlight = resultAirline[i];
+        const Flight& originalFlight = mFlightMap[resultFlight.mnFlightId];
+        const int originalType = originalFlight.mnAirplaneType;
+        const time_t originalTakeOffTime = originalFlight.mtStartDateTime;
+        
+        if (originalType != thisPlaneType) {
+            icost += FlightTypeChangeParams[originalType-1][thisPlaneType-1];
+        }
+        if (originalFlight.mnAirplaneId != airplaneId) {
+            icost += (originalTakeOffTime<=Date0506Clock16) ? PlaneChangeParamBefore : PlaneChangeParamAfter;
+        }
+        
+        const time_t newTakeOffTime = resultFlight.mtStartDateTime;
+        if (newTakeOffTime < originalTakeOffTime) {
+            icost += AheadFlightParam * (originalTakeOffTime - newTakeOffTime);
+        } else {
+            icost += DelayFlightParam * (newTakeOffTime - originalTakeOffTime);
+        }
+        
+        alreadyCost += (originalFlight.mdImportanceRatio * icost);
+        
+    }
+    cout << "ALready cost: ----------------- " << alreadyCost << endl;
+    
+    
+    // 把这个resultAirline里面的以及所有被取消的航班【对应的原航班】组合在一起
+    vector<Flight> originalFlights;
+    originalFlights.clear();
+    for (size_t i=0; i<resultAirline.size(); i++) {
+        originalFlights.push_back(mFlightMap[resultAirline[i].mnFlightId]);
+    }
+    
+    
+    if (useCancelSet)
+    {
+        for (set<int>::const_iterator sit=cancelSet.begin(); sit!=cancelSet.end(); sit++) {
+            ResultFlight rf = resultFlightMap[*sit];
+            Flight flight = mFlightMap[*sit];
+            
+//            if (FlightTypeChangeParams[flight.mnAirplaneType-1][thisPlaneType-1]>0) {
+//                continue;
+//            }
+            
+            if (flight.mbIsConnected) {
+                const ResultFlight& connectedRf = resultFlightMap[flight.mnConnectedFlightId];
+                if (!connectedRf.mbIsCancel && connectedRf.mnAirplaneId != airplaneId) {
+                    continue;
+                }
+            }
+            
+            if (flight.mvTimeWindows.empty()) {
+                continue;
+            }
+            
+            double randnum = (double)rand() / RAND_MAX;
+            if (randnum < 0.5) {
+                continue;
+            }
+            
+            pair<int, int> portPair(flight.mnStartAirport, flight.mnEndAirport);
+            if (mAirlineLimitMap.count(portPair)) {
+                if (mAirlineLimitMap[portPair].count(airplaneId)) {
+                    continue;
+                }
+            }
+            
+            originalFlights.push_back(flight);
+        }
+    }
+    
+    
+    cout << "original flights size: " << originalFlights.size() << endl;
+    
+    // 调整时间窗, 以满足单位时间容积约束
+    CutOccupiedSlices(originalFlights, false); // ############################################################
+    
+    // 看两航班能不能相连
+    const int N = (int)originalFlights.size();
+    Mat connectivityMat = Mat::zeros(N, N, CV_8UC1);
+    for (int i=0; i<N; i++) {
+        for (int j=0; j<N; j++) {
+            if (i==j) continue;
+            if (TryConnectFlights(originalFlights[i], originalFlights[j])) {
+                connectivityMat.at<uchar>(i,j) = 255;
+            }
+        }
+    }
+    
+    
+    // ---------- Gurobi 优化 -----------------------------------------------
+    const int M = N + 2;
+    Mat largeCMat = Mat::ones(M, M, CV_8UC1);
+    largeCMat *= 255;
+    
+    GRBEnv *env = NULL;
+    GRBVar *nodeVars = NULL;        // A node is a flight
+    GRBVar **arcVars = NULL;        // links between nodes
+    GRBVar *timeVars = NULL;        // take off time of flights
+    GRBVar **windowVars = NULL;     // for multiple time windows
+    GRBVar *btfVars = NULL;         // before-typhoon-flag
+    
+    nodeVars = new GRBVar[M];       // 0~(N-1) flights | N~(M-1) initial & final nodes
+    arcVars = new GRBVar*[M];
+    for (int i=0; i<M; i++)
+        arcVars[i] = new GRBVar[M];
+    
+    timeVars = new GRBVar[N];
+    windowVars = new GRBVar*[N];
+    for (int i=0; i<N; i++) {
+        const int ntw = (int)originalFlights[i].mvTimeWindows.size();
+        windowVars[i] = new GRBVar[ntw];
+    }
+    
+    btfVars = new GRBVar[N];
+    
+    // var var var... so many vars..............................
+    
+    try {
+        
+        env = new GRBEnv();
+        GRBModel model = GRBModel(*env);
+        
+        // --- Add variables into the model ---------------
+        double totalPenalty = 0;
+        
+        for (int i=0; i<M; i++) {
+            ostringstream ostr;
+            ostr << "n_" << i;
+            
+            if (i>=N)
+                nodeVars[i] = model.addVar(0.0, 1.0, 0.0, GRB_BINARY, ostr.str());
+            else {
+                const Flight& oriFlight = originalFlights[i];
+                
+                // 航班取消的惩罚
+                double cancelPenalty = -CancelFlightParam * oriFlight.mdImportanceRatio;
+                
+                // 换飞机/机型的惩罚
+                double planeChangePenaty = 0;
+                if (oriFlight.mnAirplaneType != thisPlaneType)
+                    planeChangePenaty += FlightTypeChangeParams[oriFlight.mnAirplaneType-1][thisPlaneType-1];
+                if (originalFlights[i].mnAirplaneId != airplaneId) {
+                    planeChangePenaty += (oriFlight.mtStartDateTime<=Date0506Clock16) ? PlaneChangeParamBefore : PlaneChangeParamAfter;
+                }
+                
+                double penalty = cancelPenalty + planeChangePenaty * oriFlight.mdImportanceRatio;
+                nodeVars[i] = model.addVar(0.0, 1.0, penalty, GRB_BINARY, ostr.str());
+                totalPenalty -= cancelPenalty;
+            }
+            
+            for (int j=0; j<M; j++) {
+                ostringstream astr;
+                astr << "a_" << i << j;
+                arcVars[i][j] = model.addVar(0.0, 1.0, 0.0, GRB_BINARY, astr.str());
+            }
+        }
+        
+        for (int i=0; i<N; i++) {
+            ostringstream tstr;
+            tstr << "t_" << i;
+            double t0 = originalFlights[i].mtStartDateTime;
+            timeVars[i] = model.addVar(t0-6*3600, t0+36*3600, 0.0, GRB_CONTINUOUS, tstr.str());
+            
+            const int ntw = (int)originalFlights[i].mvTimeWindows.size();
+            for (int j=0; j<ntw; j++) {
+                ostringstream wstr;
+                wstr << "w_" << i << j;
+                windowVars[i][j] = model.addVar(0.0, 1.0, 0.0, GRB_BINARY, wstr.str());
+            }
+        }
+
+        
+        
+        // ---- Add constraints ---------------------------------
+        // The initial/final node must be visited
+        for (int i=N; i<M; i++) {
+            nodeVars[i].set(GRB_DoubleAttr_LB, 1.0);
+        }
+        
+        for (int i=0; i<M; i++) {
+            GRBLinExpr nArcsIn = 0;
+            GRBLinExpr nArcsOut = 0;
+            for (int j=0; j<M; j++) {
+                nArcsIn  += arcVars[j][i];
+                nArcsOut += arcVars[i][j];
+            }
+            
+            if (i < N) {    // Flight node
+                model.addConstr(nArcsIn-nodeVars[i]==0);
+                model.addConstr(nArcsOut-nodeVars[i]==0);
+            }
+            else if (i<N+1) // Initial node
+            {
+                model.addConstr(nArcsIn == 0);
+                model.addConstr(nArcsOut == 1);
+            }
+            else {          // Final node
+                model.addConstr(nArcsIn == 1);
+                model.addConstr(nArcsOut == 0);
+            }
+        }
+        
+        
+        // Set impossible arcs
+        const int initialAirport = resultAirline[0].mnStartAirport;
+        const int finalAirport  = resultAirline[Nres-1].mnEndAirport;
+        for (int i=0; i<N; i++)
+        {
+            if (originalFlights[i].mnStartAirport != initialAirport) {
+                arcVars[N][i].set(GRB_DoubleAttr_UB, 0);
+                largeCMat.at<uchar>(N, i) = 0;
+            }
+            if (originalFlights[i].mnEndAirport != finalAirport) {
+                arcVars[i][N+1].set(GRB_DoubleAttr_UB, 0);
+                largeCMat.at<uchar>(i, N+1) = 0;
+            }
+            arcVars[i][N].set(GRB_DoubleAttr_UB, 0);
+            arcVars[N+1][i].set(GRB_DoubleAttr_UB, 0);
+            largeCMat.at<uchar>(i, N) = 0;
+            largeCMat.at<uchar>(N+1, i) = 0;
+        }
+        
+        // 虽然一些飞机实际上是可以停在机场直到结束的, 但这里我还是禁止这种情况吧, 再看吧
+        for (int i=N; i<M; i++) {
+            for (int j=N; j<M; j++) {
+                arcVars[i][j].set(GRB_DoubleAttr_UB, 0);
+                largeCMat.at<uchar>(i,j) = 0;
+            }
+        }
+        
+        for (int i=0; i<N; i++) {
+            for (int j=0; j<N; j++) {
+                if (connectivityMat.at<uchar>(i,j) == 0) {
+                    arcVars[i][j].set(GRB_DoubleAttr_UB, 0);
+                    largeCMat.at<uchar>(i,j) = 0;
+                }
+            }
+        }
+        
+        // 联程航班限制: 如果两段都不取消, 则需要继续联程, 也就是不能在两段之间插入其他航班
+        for (int i=0; i<N; i++) {
+            if (!originalFlights[i].mbIsConnedtedPrePart)
+                continue;
+            
+            const int backPartFlightId = originalFlights[i].mnConnectedFlightId;
+            for (int k=0; k<N; k++)
+            {
+                if (originalFlights[k].mnFlightId == backPartFlightId)
+                {
+                    if (!originalFlights[k].mbIsConnected || originalFlights[k].mnConnectedFlightId != originalFlights[i].mnFlightId)
+                        cout << "联程信息错误!!!" << endl;
+                    model.addConstr(nodeVars[i]+nodeVars[k]-arcVars[i][k]-1<=0);
+                    break;
+                }
+            }
+        }
+        
+        
+        // Time constraints
+        for (int i=0; i<N; i++)
+        {
+            const Flight& oriFlight = originalFlights[i];
+            
+            GRBLinExpr wsum = 0;
+            const vector<pair<time_t, time_t> > &vTimeWindows = oriFlight.mvTimeWindows;
+            const int ntw = (int)vTimeWindows.size();
+            for (int j=0; j<ntw; ++j) {
+                wsum += windowVars[i][j];
+            }
+            if (ntw > 0) {
+                model.addConstr(wsum-nodeVars[i]>=0);
+            }
+            for (int j=0; j<ntw; ++j)
+            {
+                double taj = vTimeWindows[j].first;
+                double tbj = vTimeWindows[j].second;
+                model.addConstr(timeVars[i]-taj+(1-windowVars[i][j])*BIGNUM >= 0);
+                model.addConstr(tbj-timeVars[i]+(1-windowVars[i][j])*BIGNUM >= 0);
+            }
+            
+            double flyingTime = (double)oriFlight.mtFlyingTime;
+            
+            // 航班i的降落机场受台风影响吗?
+            double typhoonEndTime = 0;
+            bool mightStopInTyphoon = false;
+            if (mTyphoonMap.count(oriFlight.mnEndAirport) && ntw > 0)
+            {
+                const Typhoon& typhoon = mTyphoonMap[oriFlight.mnEndAirport];
+                if (oriFlight.mtTakeoffErliest + flyingTime <= typhoon.mtNoStop) {
+                    mightStopInTyphoon = true;
+                    typhoonEndTime = typhoon.mtEnd;
+                    double tempTime = typhoon.mtNoStop - flyingTime;
+                    ostringstream btfstr;
+                    btfstr << "btf_" << i;
+                    btfVars[i] = model.addVar(0.0, 1.0, 0.0, GRB_BINARY, btfstr.str());
+                    model.addConstr(timeVars[i]-tempTime-60+btfVars[i]*BIGNUM >= 0);
+                    model.addConstr(timeVars[i]-tempTime+(btfVars[i]-1)*BIGNUM <= 0);
+                }
+            }
+            
+            for (int j=0; j<N; j++) {
+                if (connectivityMat.at<uchar>(i,j))
+                {
+                    pair<int, int> flightIdPair(oriFlight.mnFlightId, originalFlights[j].mnFlightId);
+                    double intervalTime = (double)MaxIntervalTime;
+                    if (mFlightIntervalTimeMap.count(flightIdPair)) {
+                        intervalTime = std::min(intervalTime, (double)mFlightIntervalTimeMap[flightIdPair]);
+                    }
+                    
+                    // 航班衔接约束
+                    model.addConstr(timeVars[i]-timeVars[j]+flyingTime+intervalTime-(1-arcVars[i][j])*BIGNUM <= 0);
+                    
+                    // 台风时限制停机的约束
+                    if (mightStopInTyphoon) {
+                        if (originalFlights[j].mtTakeoffLatest >= typhoonEndTime) {
+                            model.addGenConstrIndicator(btfVars[i], 1, timeVars[j]-typhoonEndTime+60-(1-arcVars[i][j])*BIGNUM<=0);
+                        }
+                    }
+                }
+            }
+            
+            double t0i = (double)oriFlight.mtStartDateTime;
+            double tai = t0i - 6*3600;
+            double tbi = t0i + 36*3600;
+            double importanceRatio = oriFlight.mdImportanceRatio;
+            
+            double tis[3] = {tai, t0i, tbi};
+            double cost_tis[3] = {AheadFlightParam*importanceRatio*(t0i-tai), 0, DelayFlightParam*importanceRatio*(tbi-t0i)};
+            
+            if (ntw>0) {
+                model.setPWLObj(timeVars[i], 3, tis, cost_tis);
+            }
+            
+        }
+        
+        
+        // Constraints from outside of the adjust window
+        const vector<Flight>& preAirline = mPreAirlineMap[airplaneId];
+        
+        if (!preAirline.empty())
+        {
+            const Flight& preFlight = preAirline.back();
+            double flyingTime = (double)preFlight.mtFlyingTime;
+            double takeOffTime = (double)preFlight.mtStartDateTime;
+            
+            // 如果联程航班前半段在调整窗口之前, 则后半段是不能取消的
+            if (preFlight.mbIsConnedtedPrePart) {
+                if (!originalFlights[0].mbIsConnected || preFlight.mnConnectedFlightId!=originalFlights[0].mnFlightId) {
+                    cout << "Error: preFlight shall be connected pre part!" << endl;
+                    abort();
+                }
+                nodeVars[0].set(GRB_DoubleAttr_LB, 1);
+                arcVars[N][0].set(GRB_DoubleAttr_LB, 1);
+            }
+            
+            // 台风停机限制
+            bool mightStopInTyphoon = false;
+            double typhoonEndTime = 0;
+            if (mTyphoonMap.count(preFlight.mnEndAirport)) {
+                const Typhoon& typhoon = mTyphoonMap[preFlight.mnEndAirport];
+                typhoonEndTime = typhoon.mtEnd;
+                mightStopInTyphoon = true;
+            }
+            
+            // 时间限制
+            for (int i=0; i<N; i++)
+            {
+                if (TryConnectFlights(preFlight, originalFlights[i])) {
+                    pair<int, int> flightIdPair(preFlight.mnFlightId, originalFlights[i].mnFlightId);
+                    double intervalTime = (double)MaxIntervalTime;
+                    if (mFlightIntervalTimeMap.count(flightIdPair)) {
+                        intervalTime = std::min(intervalTime, (double)mFlightIntervalTimeMap[flightIdPair]);
+                    }
+                    
+                    // 航班衔接约束
+                    model.addConstr(takeOffTime-timeVars[i]+flyingTime+intervalTime-(1-arcVars[N][i])*BIGNUM<=0);
+                    
+                    // 台风停机约束
+                    if (mightStopInTyphoon) {
+                        model.addConstr(timeVars[i] - typhoonEndTime+60-(1-arcVars[N][i])*BIGNUM <= 0);
+                    }
+                    
+                } else {
+                    arcVars[N][i].set(GRB_DoubleAttr_UB, 0);
+                }
+            }
+            
+        }
+        
+        
+        model.set(GRB_DoubleParam_Cutoff, alreadyCost+100);
+        //model.set(GRB_IntParam_OutputFlag, 0);
+        model.optimize();
+        
+        // --- Result ---
+        int status = model.get(GRB_IntAttr_Status);
+        if (status == GRB_INF_OR_UNBD || status == GRB_INFEASIBLE || status == GRB_UNBOUNDED) {
+            cout << "The model cannot be solved " << "because it's infeasible or unbounded" << endl;
+            cout << GRB_INF_OR_UNBD<< ", " << GRB_INFEASIBLE << ", " << GRB_UNBOUNDED << "->" <<status << endl;
+            return reduceCost;
+        }
+        
+        reduceCost = model.get(GRB_DoubleAttr_ObjVal);
+        
+        
+        // --- Save -----------------------
+        for (int i=0; i<N; i++)
+        {
+            int iServed = round(nodeVars[i].get(GRB_DoubleAttr_X));
+            long iStartTime = round(timeVars[i].get(GRB_DoubleAttr_X));
+            
+            ResultFlight resFlight(originalFlights[i]);
+            resFlight.mnAirplaneId = airplaneId;
+            
+            if (iServed) {
+                resFlight.mtStartDateTime = iStartTime;
+                resFlight.mtEndDateTime = iStartTime + originalFlights[i].mtFlyingTime;
+                if (cancelSet.count(resFlight.mnFlightId)) {
+                    cancelSet.erase(resFlight.mnFlightId);
+                }
+            } else {
+                resFlight.mbIsCancel = true;
+                if (!cancelSet.count(resFlight.mnFlightId)) {
+                    cancelSet.insert(resFlight.mnFlightId);
+                }
+            }
+            
+            // 更新 Slice Maps
+            if (iServed) {
+                UpdateSliceMaps(resFlight, true);
+            }
+            
+            resultFlightMap[resFlight.mnFlightId] = resFlight;
+            mResultFlightMap[resFlight.mnFlightId] = resFlight;
+            
+        }
+        
+        
+    } catch (GRBException exc) {
+        cout << "Error code = " << exc.getErrorCode() << endl;
+        cout << exc.getMessage() << endl;
+    } catch (...) {
+        cout << "Exception during optimization" << endl;
+    }
+    
+    // --- Clear ---------------------
+    delete[] nodeVars;
+    for (int i=0; i<M; i++)
+        delete[] arcVars[i];
+    delete[] arcVars;
+    delete[] timeVars;
+    for (int i=0; i<N; i++)
+        delete[] windowVars[i];
+    delete[] windowVars;
+    delete[] btfVars;
+    delete env;
+    
+    cout << "Ori flight num: -------------------------------------------------------- " << resultAirline.size() << endl;
+    cout << "Old Cost.  v.s. New Cost: " << alreadyCost << " v.s " << reduceCost << endl;
+    
+    
+    return (alreadyCost - reduceCost);
+}
+
+
+
+
+
+
+double Problem::AdjustGroupedAirlines(const std::vector<int> &airplaneIds, bool cutWhole, bool showInfo, bool saveResult, double costUB)
 {
     const int nplanes = (int)airplaneIds.size();
     double cost = nplanes * (5e+7);
@@ -1073,8 +1759,9 @@ double Problem::AdjustGroupedAirlines(const std::vector<int> &airplaneIds, bool 
         
         
         // 优化
-       // model.set(GRB_IntParam_MIPFocus, 1);
-       // model.set(GRB_DoubleParam_Heuristics, 1);
+        if (costUB < 0) {
+            model.set(GRB_DoubleParam_Cutoff, costUB+50);
+        }
         model.set(GRB_IntParam_OutputFlag, showInfo);
         model.optimize();
         
@@ -1820,6 +2507,47 @@ double Problem::AdjustLargeAirlineGroup(const std::vector<int> &airplaneIds,
 
 
 
+
+double Problem::CalcResultAirlineCost(const std::vector<ResultFlight> &resultAirline)
+{
+    const int airplaneId = resultAirline[0].mnAirplaneId;
+    const int thisPlaneType = mAllAirlineMap[airplaneId][0].mnAirplaneType;
+    
+    double alreadyCost = 0;
+    for (size_t i=0; i<resultAirline.size(); i++)
+    {
+        double icost = -CancelFlightParam;
+        const ResultFlight& resultFlight = resultAirline[i];
+        const Flight& originalFlight = mFlightMap[resultFlight.mnFlightId];
+        const int originalType = originalFlight.mnAirplaneType;
+        const time_t originalTakeOffTime = originalFlight.mtStartDateTime;
+        
+        if (originalType != thisPlaneType) {
+            icost += FlightTypeChangeParams[originalType-1][thisPlaneType-1];
+        }
+        if (originalFlight.mnAirplaneId != airplaneId) {
+            icost += (originalTakeOffTime<=Date0506Clock16) ? PlaneChangeParamBefore : PlaneChangeParamAfter;
+        }
+        
+        const time_t newTakeOffTime = resultFlight.mtStartDateTime;
+        if (newTakeOffTime < originalTakeOffTime) {
+            icost += AheadFlightParam * (originalTakeOffTime - newTakeOffTime);
+        } else {
+            icost += DelayFlightParam * (newTakeOffTime - originalTakeOffTime);
+        }
+        
+        alreadyCost += (originalFlight.mdImportanceRatio * icost);
+        
+    }
+    
+    return alreadyCost;
+    
+}
+
+
+
+
+
 void Problem::FindTimeWindowsOfFlights()
 {
     for (auto& mit : mAllAirlineMap) {
@@ -1900,6 +2628,16 @@ void Problem::FindTimeWindowsOfFlights()
                 flight.mtTakeoffErliest = flight.mtStartDateTime;
                 flight.mtTakeoffLatest = flight.mtStartDateTime;
             }
+        }
+    }
+    
+    // 记得同时也更新mFlightMap里面航班的时间窗, 把航班全拷贝过去就行了
+    for (auto& mit : mAllAirlineMap)
+    {
+        const vector<Flight>& airline = mit.second;
+        for (size_t i=0; i<airline.size(); i++) {
+            const int flightId = airline[i].mnFlightId;
+            mFlightMap[flightId] = airline[i];
         }
     }
     
@@ -2076,7 +2814,7 @@ void Problem::CutOccupiedSlices(std::vector<Flight> &vFlights, bool cutWhole)
             if (mTyphoonMap.count(flight.mnEndAirport) && !mTyphoonMap[flight.mnEndAirport].mbStopLimitedOnly) {
                 const Typhoon& typhoon = mTyphoonMap[flight.mnEndAirport];
                 for (auto& mit : typhoon.mSliceMap) {
-                    if (mit.second >= 1) {
+                    if (mit.second >= 2) {
                         int loc = mit.first;
                         time_t tfront = typhoon.mtOneHourBeforeNoTakeoff + loc * 300 - flight.mtFlyingTime;
                         Helper::SubtractInterval(flight.mvTimeWindows, pair<time_t, time_t>(tfront-6, tfront+300));

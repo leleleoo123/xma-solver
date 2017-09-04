@@ -29,12 +29,18 @@ public:
     
     void Solve();
    
-    double AdjustGroupedAirlines(const std::vector<int> &vAirplaneIds, bool cutWhole, bool showInfo, bool saveResult);
+    double AdjustGroupedAirlines(const std::vector<int> &vAirplaneIds, bool cutWhole, bool showInfo, bool saveResult, double costUB);
     
     double AdjustLargeAirlineGroup(const std::vector<int> &vAriplaneIds,
                                    std::map<int, ResultFlight>& resultFlightMap,
                                    std::map<int, std::vector<ResultFlight> >& resultAirlineMap,
                                    double maxOptTime);
+    
+    double LetTspWork(const int airplaneId,
+                      std::map<int, ResultFlight> &resultFlightMap,
+                      std::set<int> &cancelSet,
+                      bool useCancelSet);
+    
     
     void SaveResults(const std::string &filename);
     
@@ -44,7 +50,12 @@ private:
     void FindAFeasibleSolution();
     
     // 用Gurobi提升可行解
-    void ImproveSolutionGrb();
+    void ImproveSolution();
+    
+    void BruteImprove();
+    
+    // 计算一个ResultAline的cost
+    double CalcResultAirlineCost(const std::vector<ResultFlight>& resultAirline);
     
     // 把起飞时间在调整窗口之前的航班分到一边去
     void SeparatePreAdjFlights();
