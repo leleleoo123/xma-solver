@@ -47,6 +47,11 @@ public:
                        std::set<int> &cancelSet,
                        bool useCancelSet);
     
+    double LetManyTspWork(const std::vector<int>& airplaneIds,
+                          std::map<int, ResultFlight> &resultFlightMap,
+                          std::set<int> &cancelSet,
+                          bool useCancelSet);
+    
     
     void SaveResults(const std::string &filename);
     
