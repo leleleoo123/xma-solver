@@ -41,6 +41,12 @@ public:
                       std::set<int> &cancelSet,
                       bool useCancelSet);
     
+    double LetTwoTspWork(const int airplaneIdA,
+                       const int airplaneIdB,
+                       std::map<int, ResultFlight> &resultFlightMap,
+                       std::set<int> &cancelSet,
+                       bool useCancelSet);
+    
     
     void SaveResults(const std::string &filename);
     

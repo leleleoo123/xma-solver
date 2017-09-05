@@ -11,7 +11,10 @@
 
 Typhoon::Typhoon() {}
 
-Typhoon::Typhoon(const int airportId) : mnAirportId(airportId), mbStopLimitedOnly(true) {}
+Typhoon::Typhoon(const int airportId) : mnAirportId(airportId), mbStopLimitedOnly(true)
+{
+    mStopAirplaneSet.clear();
+}
 
 void Typhoon::ExtractInfo(const Scene &scene)
 {
@@ -37,6 +40,13 @@ void Typhoon::ExtractInfo(const Scene &scene)
         mnMaxStopPlanes = scene.mnMaxStopPlanes;
     }
 }
+
+
+int Typhoon::NumStopAllowed()
+{
+    return (mnMaxStopPlanes - (int)mStopAirplaneSet.size());
+}
+
 
 
 bool Typhoon::IsTakeoffInTyphoon(const time_t tTakeoff)

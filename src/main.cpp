@@ -50,7 +50,7 @@ int main(int argc, const char * argv[]) {
     clock_t tend = clock();
     cout << "Time: " << (double)(tend-tbegin)/CLOCKS_PER_SEC << endl;
     
-    prob.SaveResults("/Users/tanzhidan/Documents/java-xma/results/leleleoo123_420000.00_1.csv");
+    prob.SaveResults("/Users/tanzhidan/Documents/java-xma/results/leleleoo123_420000.00_422.csv");
     
     
     string str1 = "5/4/17 00:00";

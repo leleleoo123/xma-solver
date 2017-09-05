@@ -14,6 +14,7 @@
 #include "ResultFlight.hpp"
 #include <iostream>
 #include <map>
+#include <set>
 
 class Typhoon
 {
@@ -38,6 +39,7 @@ public:
     void AddSliceCount(const time_t& t);
     void ReduceSliceCount(const time_t& t);
     
+    int NumStopAllowed();
     
     
 public:
@@ -70,7 +72,7 @@ public:
     
     // -------- for solver -------
     // 台风期间在该机场停机的飞机
-    std::vector<int> mvStopAirplanes;
+    std::set<int> mStopAirplaneSet;
     
     // 台风前一小时/台风后两小时, 每5分钟内起飞或者降落的航班数
     std::map<int, int> mSliceMap;
